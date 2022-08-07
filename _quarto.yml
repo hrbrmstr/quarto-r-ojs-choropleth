@@ -1,0 +1,12 @@
+project:
+  output-dir: docs
+  title: "quarto-r-ojs-choropleth"
+  render:
+    - index.qmd
+
+format: 
+  html:
+    message: false
+    warning: false
+    echo: false
+    code-tools: true

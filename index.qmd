@@ -1,0 +1,183 @@
+---
+title: "OJS Choropleth With Data From R"
+params:
+  update: FALSE
+format: 
+  html:
+    message: false
+    warning: false
+    echo: false
+    code-tools: true
+---
+
+A small Quarto project/document that:
+
+- (optionall) grabs the latest NOAA watches/warnings/hazaards shapefile
+- displays an AlbersUSA projected map 
+- uses synthesized data from R as the basis for county-level data
+- fills by county based on ^^ data
+- overlays the areas with current hazards/warnings/watches
+
+Go to this project directory and do:
+
+- `quarto render` or `quarto render -P update:TRUE` if you want a new NOAA shapefile
+
+```{r data-create}
+library(tidyverse)
+
+if (!file.exists("counties-10m.json")) {
+  download.file("https://cdn.jsdelivr.net/npm/us-atlas@3/counties-10m.json", "counties-10m.json")
+}
+
+if ((params$update) || (!(file.exists("current-all.geojson")))) {
+
+  require(gdalUtilities)
+  require(sf)
+  
+  download.file(
+    url = "https://tgftp.nws.noaa.gov/SL.us008001/DF.sha/DC.cap/DS.WWA/current_all.tar.gz",
+    destfile = "current_all.tar.gz" 
+  )
+
+  unlink("current-all.geojson", force = TRUE)
+
+  gdalUtilities::ogr2ogr(
+    src_datasource_name = "/vsitar/current_all.tar.gz",
+    dst_datasource_name = "current-all.geojson",
+    f = "GeoJSON",
+    t_srs = "crs:84"
+  )
+
+  sf::st_read("current-all.geojson") |> 
+    rmapshaper::ms_simplify() -> current_all
+
+  unlink("current-all.geojson", force = TRUE)
+  sf::st_write(current_all, "current-all.geojson")
+
+}
+
+tibble(
+  FIPS = read_lines("https://rud.is/dl/counties.txt"),
+  value = as.integer(runif(length(FIPS), 0, 1000))
+) -> county_data
+```
+
+```{r data-include}
+ojs_define(county_data = county_data)
+```
+
+```{ojs html}
+html`<style>
+.d3-tip {
+  background-color: white;
+  color: black;
+  border: 1px solid black;
+  padding: 6px;
+  font-size: 10pt;
+  line-height: 0.9;
+  border-radius: 6px;
+  pointer-events: none;
+}
+
+.county {
+}
+
+.state {
+  pointer-events: none;
+}
+
+</style>`
+```
+
+```{ojs setup}
+d3 = require('d3@7', 'd3-geo@3')
+topojson = require('topojson-client@3')
+d3tip = require('https://cdnjs.cloudflare.com/ajax/libs/d3-tip/0.9.1/d3-tip.js')
+```
+
+```{ojs}
+import { Legend } from '@d3/color-legend'
+```
+
+```{ojs}
+projection = d3.geoAlbersUsa()
+alb_path = d3.geoPath().projection(projection)
+alt_us = await FileAttachment('current-all.geojson').json()
+```
+
+```{ojs albers-map}
+us = await FileAttachment('counties-10m.json').json()
+```
+
+```{ojs transform-data}
+county_data_transposed = transpose(county_data)
+```
+
+```{ojs mapify-data}
+map_data = new Map(county_data_transposed.map(d => [ d.FIPS, d.value ]));
+```
+
+```{ojs setup-fill-scale}
+value_range = d3.extent(county_data_transposed.map(d => d.value))
+scale_fill_viridis_cividis = d3.scaleSequential(d3.interpolateCividis).domain(value_range)
+```
+
+```{ojs legendary}
+Legend(d3.scaleSequential(value_range, d3.interpolateCividis), {
+  title: 'Some Descriptive Legend Title'
+})
+```
+
+```{ojs the-choropleth}
+chart = {
+
+  const width = 960
+  const height = 600
+
+
+  const svg = d3.create("svg")
+    .attr("width", width)
+    .attr("height", height)
+    .attr("viewBox", [0, 0, width, height])
+    .attr("style", "width: 100%; height: auto; height: intrinsic;")
+
+  const tip = d3tip().attr('class', 'd3-tip')
+                .html((evt, d) => map_data.get(d.id))
+
+  svg.call(tip)
+
+  svg.append("g")
+    .attr("class", "county")
+    .selectAll("path")
+    .data(topojson.feature(us, us.objects.counties).features)
+    .enter()
+      .append("path")
+        .style('fill', d => scale_fill_viridis_cividis(d.val = map_data.get(d.id)))
+        .on('mouseover', tip.show)
+        .on('mouseout' , tip.hide)
+        // .on('click', (evt, d) => console.log(d)) //window.location.href = "https://kagi.com/search?q=" + d.id  }) // whatev
+        .attr('stroke', '#c3c3c399')
+        .attr('stroke-width', 0.5)
+        .attr('d', alb_path) // projected path
+
+  svg.append("path")
+    .datum(topojson.mesh(us, us.objects.states, (a, b) => a !== b))
+    .attr('class', 'state')
+    .attr('fill', 'none')
+    .attr('stroke', '#ffffff')
+    .attr('stroke-width', 2)
+    .attr("d", alb_path) // projected path
+
+  svg.append("g")
+	  .selectAll("path")
+	  .data(alt_us.features)
+  	.join('path')
+    .attr('stroke', '#e31a1c')
+    .attr('stroke-width', 0.5)
+    .attr('fill', '#252525aa')
+    .attr('d', alb_path) // projected path
+
+  return(svg.node())
+
+}
+```
