@@ -74,6 +74,7 @@ if ((params$update) || (!(file.exists("current-all.geojson")))) {
 
 }
 
+# Simulate some county-level data in R
 tibble(
   FIPS = read_lines("https://rud.is/dl/counties.txt"),
   value = as.integer(runif(length(FIPS), 0, 1000))
@@ -81,6 +82,8 @@ tibble(
 ```
 
 ```{r data-include}
+# this will put ^^ into the output document as a variable
+# you can access in javascript (ojs) blocks
 ojs_define(county_data = county_data)
 ```
 

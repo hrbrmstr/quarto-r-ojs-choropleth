@@ -1,3 +1,5 @@
+# This is a justfile (https://github.com/casey/just)
+
 # render project
 render:
 	quarto render
