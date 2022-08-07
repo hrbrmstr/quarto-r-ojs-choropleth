@@ -88,6 +88,7 @@ ojs_define(county_data = county_data)
 ```
 
 ```{ojs html}
+// this will let us add our own CSS to the resultant document
 html`<style>
 .d3-tip {
   background-color: white;
@@ -111,34 +112,46 @@ html`<style>
 ```
 
 ```{ojs setup}
+// you can stick more in one {ojs} block than you can in
+// a typical ObservableHQ cell. That's nice.
 d3 = require('d3@7', 'd3-geo@3')
 topojson = require('topojson-client@3')
 d3tip = require('https://cdnjs.cloudflare.com/ajax/libs/d3-tip/0.9.1/d3-tip.js')
 ```
 
 ```{ojs}
+// for our legendary legend
 import { Legend } from '@d3/color-legend'
 ```
 
 ```{ojs}
+// setup albersUSA projection and the functions we will need to 
+// reproject the unprojected geojson files
 projection = d3.geoAlbersUsa()
 alb_path = d3.geoPath().projection(projection)
 alt_us = await FileAttachment('current-all.geojson').json()
 ```
 
 ```{ojs albers-map}
+// this is the file we downloaded above in R. 
+// It'll get embedded in the document.
 us = await FileAttachment('counties-10m.json').json()
 ```
 
 ```{ojs transform-data}
+// this puts the data frame into a form we can more easily use
 county_data_transposed = transpose(county_data)
 ```
 
 ```{ojs mapify-data}
+// rather than stick the data into the `us` topojson object
+// we will build a simple mapped object so we can use the 
+// FIPS code as a key to retrieve a value. 
 map_data = new Map(county_data_transposed.map(d => [ d.FIPS, d.value ]));
 ```
 
 ```{ojs setup-fill-scale}
+// we are going to fill the counties with the values we synthesized
 value_range = d3.extent(county_data_transposed.map(d => d.value))
 scale_fill_viridis_cividis = d3.scaleSequential(d3.interpolateCividis).domain(value_range)
 ```
@@ -155,18 +168,21 @@ chart = {
   const width = 960
   const height = 600
 
-
+  // this will help make our svg responsive
   const svg = d3.create("svg")
     .attr("width", width)
     .attr("height", height)
     .attr("viewBox", [0, 0, width, height])
     .attr("style", "width: 100%; height: auto; height: intrinsic;")
 
+  // we will display the value from the data frame we created in the tooltip
   const tip = d3tip().attr('class', 'd3-tip')
                 .html((evt, d) => map_data.get(d.id))
 
+  // enable the tooltips
   svg.call(tip)
 
+  // enable the tooltips
   svg.append("g")
     .attr("class", "county")
     .selectAll("path")
@@ -181,6 +197,7 @@ chart = {
         .attr('stroke-width', 0.5)
         .attr('d', alb_path) // projected path
 
+  // overlay the state layer
   svg.append("path")
     .datum(topojson.mesh(us, us.objects.states, (a, b) => a !== b))
     .attr('class', 'state')
@@ -189,6 +206,7 @@ chart = {
     .attr('stroke-width', 2)
     .attr("d", alb_path) // projected path
 
+  // overlay the hazards layer
   svg.append("g")
 	  .selectAll("path")
 	  .data(alt_us.features)
