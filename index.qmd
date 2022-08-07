@@ -10,9 +10,9 @@ format:
     code-tools: true
 ---
 
-A small Quarto project/document that:
+A small Quarto project/document [[GH Repo](https://github.com/hrbrmstr/quarto-r-ojs-choropleth)] that:
 
-- (optionall) grabs the latest NOAA watches/warnings/hazaards shapefile
+- (optional) grabs the latest NOAA watches/warnings/hazaards shapefile
 - displays an AlbersUSA projected map 
 - uses synthesized data from R as the basis for county-level data
 - fills by county based on ^^ data
@@ -35,6 +35,9 @@ if (!file.exists("counties-10m.json")) {
   )
 }
 
+# we pass in a parameter at cmdline render if we want to re-download
+# and re-process the watches/warnings/hazards. It's usually a big shapefile
+# so we convert it to GeoJSON and then make it a reasonable size.
 if ((params$update) || (!(file.exists("current-all.geojson")))) {
 
   require(gdalUtilities)
